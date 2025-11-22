@@ -1,4 +1,5 @@
 import os
+import re
 import hashlib
 import torch
 import torch.nn.functional as F
@@ -16,6 +17,8 @@ from model import ModernTrajectoryNet
 MODEL_PATH = "checkpoints/best_model_ema.pth"
 EMBEDDING_MODEL_PATH = "models/embeddinggemma-300m" # Or HuggingFace ID
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+DIRECT_SIM_WEIGHT = float(os.getenv("DIRECT_SIM_WEIGHT", 0.45))
+KEYWORD_BOOST_WEIGHT = float(os.getenv("KEYWORD_BOOST_WEIGHT", 0.08))
 
 app = FastAPI()
 
@@ -119,6 +122,27 @@ def get_taxonomy_embeddings(text: str):
     state.taxonomy_cache[text_hash] = (embeddings, paths)
     return embeddings, paths
 
+def tokenize(text: str) -> set:
+    return set(re.findall(r"[a-z0-9]+", text.lower()))
+
+def compute_keyword_boosts(transaction: str, paths: List[str]) -> List[float]:
+    if KEYWORD_BOOST_WEIGHT <= 0:
+        return [0.0] * len(paths)
+    tx_tokens = tokenize(transaction)
+    boosts = []
+    for path in paths:
+        cat_tokens = tokenize(path)
+        if not cat_tokens or not tx_tokens:
+            boosts.append(0.0)
+            continue
+        overlap = len(tx_tokens & cat_tokens)
+        if overlap == 0:
+            boosts.append(0.0)
+            continue
+        coverage = overlap / len(cat_tokens)
+        boosts.append(KEYWORD_BOOST_WEIGHT * min(1.0, coverage * 2))
+    return boosts
+
 # --- Endpoints ---
 
 @app.post("/predict", response_model=PredictionResponse)
@@ -135,6 +159,7 @@ async def predict(req: PredictionRequest):
     tx_emb = state.embedding_model.encode(req.transaction, convert_to_tensor=True, device=DEVICE)
     # Shape: [D] -> [1, D]
     tx_emb = tx_emb.unsqueeze(0)
+    tx_norm = F.normalize(tx_emb, p=2, dim=1)
     
     # 2. Run Trajectory Model
     with torch.no_grad():
@@ -152,9 +177,19 @@ async def predict(req: PredictionRequest):
     
     pred_norm = F.normalize(predicted_final_emb, p=2, dim=1)
     targets_norm = F.normalize(target_embs, p=2, dim=1)
+    pred_sims = torch.mm(pred_norm, targets_norm.T).squeeze(0)
+    direct_sims = torch.mm(tx_norm, targets_norm.T).squeeze(0)
+
+    if DIRECT_SIM_WEIGHT > 0:
+        sims = (1 - DIRECT_SIM_WEIGHT) * pred_sims + DIRECT_SIM_WEIGHT * direct_sims
+    else:
+        sims = pred_sims
     
     # Cosine similarity: [1, N]
-    sims = torch.mm(pred_norm, targets_norm.T).squeeze(0)
+    keyword_boosts = compute_keyword_boosts(req.transaction, target_paths)
+    if any(keyword_boosts):
+        boost_tensor = torch.tensor(keyword_boosts, device=sims.device, dtype=sims.dtype)
+        sims = sims + boost_tensor
     
     # 5. Rank
     top_k = min(10, len(target_paths))

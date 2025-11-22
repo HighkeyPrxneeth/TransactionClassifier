@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ARCHITECT // TRANSACTION CLASSIFIER</title>
+    <title>TRANSACTION CLASSIFIER</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
         
@@ -37,14 +37,41 @@
             outline: none;
             border-color: #FF4400;
         }
+
+        /* Dark-themed scrollbars (WebKit) and good defaults for Firefox */
+        *::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        *::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        *::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.12);
+            border-radius: 9999px;
+            border: 2px solid transparent;
+            background-clip: padding-box;
+        }
+
+        *::-webkit-scrollbar-thumb:hover {
+            background: rgba(255,255,255,0.24);
+        }
+
+        /* Firefox */
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255,255,255,0.24) transparent;
+        }
     </style>
 </head>
 <body class="h-screen w-screen overflow-hidden flex flex-col">
 
     <div id="root" class="h-full w-full"></div>
 
-    <script type="text/babel">
-        const { useState, useEffect, useRef } = React;
+    <script type="text/babel" data-presets="env,react">
+        const { useState, useEffect, useRef, useMemo } = React;
 
         const DEFAULT_TAXONOMY = `Dining and Drinking
     Bar
@@ -54,42 +81,258 @@
     Restaurant
         Fast Food
         Fine Dining
+        Food Delivery
 Retail
     Clothing
     Electronics
 Services
     Consulting
     Legal
+    Gas Station
 Travel
     Airline
     Hotel
     Taxi`;
 
+        const INDENT_SIZE = 4;
+
+        const cloneTree = (nodes) => nodes.map(node => ({
+            ...node,
+            children: node.children ? cloneTree(node.children) : []
+        }));
+
+        const findNodeRefs = (nodes, id, parent = null) => {
+            if (!id) return null;
+            for (let i = 0; i < nodes.length; i++) {
+                const node = nodes[i];
+                if (node.id === id) {
+                    return { node, parent, siblings: nodes, index: i };
+                }
+                const found = findNodeRefs(node.children || [], id, node);
+                if (found) return found;
+            }
+            return null;
+        };
+
+        const findNodeById = (nodes, id) => {
+            for (const node of nodes) {
+                if (node.id === id) return node;
+                const found = findNodeById(node.children || [], id);
+                if (found) return found;
+            }
+            return null;
+        };
+
+        const parseTaxonomyText = (text, createNode) => {
+            const lines = text.split('\n');
+            const root = [];
+            const stack = [];
+
+            lines.forEach(rawLine => {
+                if (!rawLine.trim()) return;
+                const indent = rawLine.match(/^\s*/)[0].length;
+                const level = Math.floor(indent / INDENT_SIZE);
+                const node = createNode(rawLine.trim());
+
+                if (level === 0) {
+                    root.push(node);
+                } else {
+                    const parent = stack[level - 1];
+                    if (parent) {
+                        parent.children.push(node);
+                    } else {
+                        root.push(node);
+                    }
+                }
+                stack[level] = node;
+                stack.length = level + 1;
+            });
+
+            return root.length ? root : [createNode("NEW NODE")];
+        };
+
+        const treeToIndentedText = (nodes, depth = 0) => {
+            return nodes
+                .map(node => {
+                    const current = `${' '.repeat(depth * INDENT_SIZE)}${node.label || 'UNNAMED'}`;
+                    const children = treeToIndentedText(node.children || [], depth + 1);
+                    return children ? `${current}\n${children}` : current;
+                })
+                .join('\n');
+        };
+
+        const getFirstNodeId = (nodes) => {
+            if (!nodes.length) return null;
+            return nodes[0].id;
+        };
+
+        function TreeNode({ node, depth, selectedId, onSelect }) {
+            return (
+                <div className="mb-2" style={{ marginLeft: depth * 16 }}>
+                    <div
+                        className={`border border-zinc-800 px-3 py-2 flex justify-between items-center cursor-pointer transition-colors ${selectedId === node.id ? 'bg-white text-black' : 'hover:bg-zinc-900'}`}
+                        onClick={() => onSelect(node.id)}
+                    >
+                        <span className="font-semibold tracking-tight">{node.label || 'UNNAMED'}</span>
+                        <span className="text-[10px] text-zinc-500">{node.children.length} CHILD</span>
+                    </div>
+                    {node.children && node.children.map(child => (
+                        <TreeNode
+                            key={child.id}
+                            node={child}
+                            depth={depth + 1}
+                            selectedId={selectedId}
+                            onSelect={onSelect}
+                        />
+                    ))}
+                </div>
+            );
+        }
+
         function App() {
-            const [taxonomy, setTaxonomy] = useState(DEFAULT_TAXONOMY);
+            const idCounter = useRef(0);
+            const initialTreeRef = useRef(null);
+
+            const createNode = (label = "NEW NODE") => ({
+                id: `node-${idCounter.current++}`,
+                label,
+                children: []
+            });
+
+            if (!initialTreeRef.current) {
+                initialTreeRef.current = parseTaxonomyText(DEFAULT_TAXONOMY, createNode);
+            }
+
+            const [taxonomy, setTaxonomy] = useState(initialTreeRef.current);
+            const [selectedId, setSelectedId] = useState(initialTreeRef.current[0]?.id || null);
             const [transaction, setTransaction] = useState("");
             const [results, setResults] = useState([]);
             const [loading, setLoading] = useState(false);
             const [error, setError] = useState(null);
 
+            // Resizable left taxonomy panel
+            const [leftWidth, setLeftWidth] = useState(360); // initial width in px
+            const resizingRef = useRef(false);
+            const startXRef = useRef(0);
+            const startWidthRef = useRef(leftWidth);
+
+            const onMouseDownDivider = (e) => {
+                resizingRef.current = true;
+                startXRef.current = e.clientX;
+                startWidthRef.current = leftWidth;
+                document.body.style.cursor = 'col-resize';
+                e.preventDefault();
+            };
+
+            useEffect(() => {
+                const onMove = (e) => {
+                    if (!resizingRef.current) return;
+                    const dx = e.clientX - startXRef.current;
+                    let newWidth = startWidthRef.current + dx;
+                    // clamp width
+                    newWidth = Math.max(240, Math.min(newWidth, 900));
+                    setLeftWidth(newWidth);
+                };
+
+                const onUp = () => {
+                    if (resizingRef.current) {
+                        resizingRef.current = false;
+                        document.body.style.cursor = '';
+                    }
+                };
+
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+                window.addEventListener('mouseleave', onUp);
+
+                return () => {
+                    document.removeEventListener('mousemove', onMove);
+                    document.removeEventListener('mouseup', onUp);
+                    window.removeEventListener('mouseleave', onUp);
+                };
+            }, []);
+
+            const selectedNode = useMemo(() => findNodeById(taxonomy, selectedId), [taxonomy, selectedId]);
+            const taxonomyText = useMemo(() => treeToIndentedText(taxonomy), [taxonomy]);
+
+            const updateTree = (mutator) => {
+                setTaxonomy(prev => {
+                    const cloned = cloneTree(prev);
+                    const refs = findNodeRefs(cloned, selectedId, null);
+                    if (!refs) return prev;
+                    mutator(refs, cloned);
+                    return cloned;
+                });
+            };
+
+            const handleRename = (value) => {
+                if (!selectedId) return;
+                updateTree(({ node }) => {
+                    node.label = value;
+                });
+            };
+
+            const handleAddRoot = () => {
+                const newNode = createNode("NEW DOMAIN");
+                setTaxonomy(prev => [...cloneTree(prev), newNode]);
+                setSelectedId(newNode.id);
+            };
+
+            const handleAddChild = () => {
+                if (!selectedId) return;
+                const newNode = createNode("NEW CATEGORY");
+                updateTree(({ node }) => {
+                    node.children.push(newNode);
+                });
+                setSelectedId(newNode.id);
+            };
+
+            const handleAddSibling = () => {
+                if (!selectedId) return;
+                const newNode = createNode("NEW CATEGORY");
+                updateTree(({ siblings, index }) => {
+                    siblings.splice(index + 1, 0, newNode);
+                });
+                setSelectedId(newNode.id);
+            };
+
+            const handleDelete = () => {
+                if (!selectedId) return;
+                let nextSelection = null;
+                setTaxonomy(prev => {
+                    const cloned = cloneTree(prev);
+                    const refs = findNodeRefs(cloned, selectedId, null);
+                    if (!refs) return prev;
+                    refs.siblings.splice(refs.index, 1);
+                    if (refs.siblings.length) {
+                        const fallbackIndex = Math.min(refs.index, refs.siblings.length - 1);
+                        nextSelection = refs.siblings[fallbackIndex]?.id || refs.parent?.id || getFirstNodeId(cloned);
+                    } else {
+                        nextSelection = refs.parent?.id || getFirstNodeId(cloned);
+                    }
+                    return cloned;
+                });
+                setSelectedId(nextSelection);
+            };
+
             const handlePredict = async () => {
-                if (!transaction.trim()) return;
-                
+                if (!transaction.trim() || !taxonomyText.trim()) return;
+
                 setLoading(true);
                 setError(null);
-                
+
                 try {
                     const response = await fetch('/predict', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            transaction: transaction,
-                            taxonomy_text: taxonomy
+                            transaction,
+                            taxonomy_text: taxonomyText
                         })
                     });
-                    
+
                     if (!response.ok) throw new Error("Prediction failed");
-                    
+
                     const data = await response.json();
                     setResults(data.matches);
                 } catch (err) {
@@ -99,54 +342,128 @@ Travel
                 }
             };
 
-            // Debounce prediction on transaction change
             useEffect(() => {
+                if (!transaction.trim()) return;
                 const timer = setTimeout(() => {
-                    if (transaction) handlePredict();
-                }, 500);
+                    handlePredict();
+                }, 600);
                 return () => clearTimeout(timer);
-            }, [transaction, taxonomy]);
+            }, [transaction, taxonomyText]);
 
             return (
-                <div className="flex h-full w-full">
-                    {/* LEFT PANEL: TAXONOMY */}
-                    <div className="w-1/3 h-full border-r border-zinc-800 flex flex-col">
-                        <div className="p-6 border-b border-zinc-800">
-                            <h1 className="text-xl font-bold tracking-tighter">TAXONOMY_ARCHITECT</h1>
-                            <p className="text-xs text-zinc-500 mt-1">DEFINE HIERARCHY VIA INDENTATION</p>
+                <div className="flex flex-col md:flex-row h-full w-full">
+                    {/* LEFT PANEL */}
+                    <div className="h-full border-r border-zinc-900 flex flex-col bg-black/70"
+                        style={{ width: `${leftWidth}px`, minWidth: 240, maxWidth: 900 }}>
+                        <div className="p-6 border-b border-zinc-900 flex items-center justify-between">
+                            <div>
+                                <h1 className="text-lg font-bold tracking-tight">INTERACTIVE TAXONOMY</h1>
+                                <p className="text-xs text-zinc-500">CLICK NODES · BUILD TREE · ZERO GUESSWORK</p>
+                            </div>
+                            <button
+                                className="text-xs px-4 py-2 border border-white text-white hover:bg-white hover:text-black transition-colors"
+                                onClick={handleAddRoot}
+                            >
+                                ADD ROOT
+                            </button>
                         </div>
-                        <textarea 
-                            className="flex-1 bg-black text-zinc-300 p-6 resize-none font-mono text-sm leading-relaxed focus:bg-zinc-900 transition-colors"
-                            value={taxonomy}
-                            onChange={(e) => setTaxonomy(e.target.value)}
-                            spellCheck="false"
-                        />
+
+                        <div className="flex-1 overflow-y-auto p-6 space-y-2">
+                            {taxonomy.length ? (
+                                taxonomy.map(node => (
+                                    <TreeNode
+                                        key={node.id}
+                                        node={node}
+                                        depth={0}
+                                        selectedId={selectedId}
+                                        onSelect={setSelectedId}
+                                    />
+                                ))
+                            ) : (
+                                <div className="text-zinc-600 text-sm">NO DOMAINS YET. START WITH “ADD ROOT”.</div>
+                            )}
+                        </div>
+
+                        <div className="border-t border-zinc-900 p-6 space-y-4">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-xs text-zinc-500 tracking-widest">NODE EDITOR</p>
+                                    <p className="text-sm text-zinc-400">Modify label + structure.</p>
+                                </div>
+                                {selectedNode && (
+                                    <span className="text-[10px] text-zinc-500">ID: {selectedNode.id}</span>
+                                )}
+                            </div>
+                            <input
+                                type="text"
+                                value={selectedNode?.label || ''}
+                                onChange={(e) => handleRename(e.target.value)}
+                                placeholder="SELECT A NODE"
+                                disabled={!selectedNode}
+                                className="w-full bg-black border border-zinc-800 px-3 py-2 text-sm disabled:text-zinc-700"
+                            />
+                            <div className="flex flex-wrap gap-2 text-xs">
+                                <button onClick={handleAddChild} className="px-3 py-2 border border-white text-white hover:bg-white hover:text-black transition-colors" disabled={!selectedNode}>
+                                    ADD CHILD
+                                </button>
+                                <button onClick={handleAddSibling} className="px-3 py-2 border border-white text-white hover:bg-white hover:text-black transition-colors" disabled={!selectedNode}>
+                                    ADD PEER
+                                </button>
+                                <button onClick={handleDelete} className="px-3 py-2 border border-red-600 text-red-400 hover:bg-red-600 hover:text-black transition-colors" disabled={!selectedNode}>
+                                    DELETE
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="border-t border-zinc-900 p-6">
+                            <p className="text-xs text-zinc-500 tracking-widest mb-2">INDENTED EXPORT</p>
+                            <pre className="text-[11px] text-zinc-400 bg-zinc-950 p-4 h-40 overflow-y-auto">
+{taxonomyText || '// Add nodes to generate hierarchy'}
+                            </pre>
+                        </div>
                     </div>
 
-                    {/* RIGHT PANEL: INFERENCE */}
-                    <div className="w-2/3 h-full flex flex-col relative">
-                        {/* INPUT AREA */}
-                        <div className="h-1/3 flex flex-col justify-center px-12 border-b border-zinc-800">
-                            <label className="text-xs text-zinc-500 mb-4 tracking-widest">INPUT TRANSACTION STRING</label>
-                            <input 
-                                type="text" 
-                                className="bg-transparent text-4xl font-bold text-white placeholder-zinc-800 border-b-2 border-zinc-800 pb-2 w-full"
+                    {/* DRAG HANDLE (visible on md+) */}
+                    <div
+                        className="hidden md:flex items-center justify-center"
+                        style={{ width: 10, cursor: 'col-resize', userSelect: 'none' }}
+                        onMouseDown={onMouseDownDivider}
+                        title="Drag to resize taxonomy panel"
+                    >
+                        <div style={{ width: 2, height: '60%', background: '#212121', borderRadius: 2 }} />
+                    </div>
+
+                    {/* RIGHT PANEL */}
+                    <div className="flex-1 h-full flex flex-col relative">
+                        <div className="p-10 border-b border-zinc-900">
+                            <label className="text-xs text-zinc-500 tracking-widest">TRANSACTION STRING</label>
+                            <input
+                                type="text"
+                                className="w-full bg-transparent text-4xl font-bold text-white placeholder-zinc-800 border-b-2 border-zinc-900 pb-3 focus:border-white transition-colors"
                                 placeholder="STARBUCKS #1234..."
                                 value={transaction}
                                 onChange={(e) => setTransaction(e.target.value)}
                                 autoFocus
                             />
+                            <div className="flex justify-between items-center mt-4 text-xs text-zinc-500">
+                                <span>{taxonomy.length} ROOT NODES · {taxonomyText.split('\n').filter(Boolean).length} TOTAL LABELS</span>
+                                <button
+                                    onClick={handlePredict}
+                                    className="px-4 py-2 border border-white text-white hover:bg-white hover:text-black transition-colors"
+                                >
+                                    RUN CLASSIFIER
+                                </button>
+                            </div>
                         </div>
 
-                        {/* RESULTS AREA */}
-                        <div className="flex-1 overflow-y-auto p-12">
+                        <div className="flex-1 overflow-y-auto p-10">
                             <div className="flex justify-between items-end mb-8">
                                 <h2 className="text-sm font-bold tracking-widest accent-text">CLASSIFICATION RESULTS</h2>
                                 {loading && <span className="text-xs animate-pulse text-zinc-500">COMPUTING TRAJECTORY...</span>}
                             </div>
 
                             {error && (
-                                <div className="border border-red-900 text-red-500 p-4 text-sm font-mono">
+                                <div className="border border-red-900 text-red-500 p-4 text-sm font-mono mb-6">
                                     ERROR: {error}
                                 </div>
                             )}
@@ -163,23 +480,22 @@ Travel
                                             </span>
                                         </div>
                                         <div className="w-full h-2 bg-zinc-900 overflow-hidden">
-                                            <div 
+                                            <div
                                                 className="h-full accent-bg transition-all duration-500 ease-out"
                                                 style={{ width: `${Math.max(0, res.score * 100)}%` }}
-                                            />
+                                            ></div>
                                         </div>
                                     </div>
                                 ))}
-                                
+
                                 {results.length === 0 && !loading && transaction && (
                                     <div className="text-zinc-600 text-sm">NO MATCHES FOUND IN MANIFOLD.</div>
                                 )}
                             </div>
                         </div>
 
-                        {/* FOOTER */}
-                        <div className="absolute bottom-0 w-full p-4 border-t border-zinc-800 bg-black text-xs text-zinc-600 flex justify-between font-mono">
-                            <span>MODERN TRAJECTORY NET // V1.0</span>
+                        <div className="absolute bottom-0 w-full p-4 border-t border-zinc-900 bg-black text-xs text-zinc-600 flex justify-between font-mono">
+                            <span>MODERN TRAJECTORY NET // V1.1</span>
                             <span>STATUS: {loading ? "BUSY" : "READY"}</span>
                         </div>
                     </div>
