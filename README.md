@@ -114,6 +114,85 @@ uvicorn app:app --reload
 
 ---
 
+## Model Details
+
+### Size & Parameters
+
+- **Total parameters:** `41,893,632`
+- **Trainable parameters:** `41,893,632`
+- **Non-trainable parameters:** `0`
+- **Size (float32):** `1,63,673 KB` (~160 MB)
+
+### Full Parameter List
+
+| Parameter | Shape | # params | Trainable |
+|---|---:|---:|---:|
+| `input_proj.0.weight` | `(768,)` | `768` | Yes |
+| `input_proj.1.weight` | `(768, 768)` | `589,824` | Yes |
+| `input_proj.1.bias` | `(768,)` | `768` | Yes |
+| `blocks.0.layer_scale` | `(768,)` | `768` | Yes |
+| `blocks.0.norm.weight` | `(768,)` | `768` | Yes |
+| `blocks.0.ffn.w1.weight` | `(2048, 768)` | `1,572,864` | Yes |
+| `blocks.0.ffn.w2.weight` | `(2048, 768)` | `1,572,864` | Yes |
+| `blocks.0.ffn.w3.weight` | `(768, 2048)` | `1,572,864` | Yes |
+| `blocks.0.se.fc.0.weight` | `(192, 768)` | `147,456` | Yes |
+| `blocks.0.se.fc.2.weight` | `(768, 192)` | `147,456` | Yes |
+| `blocks.1.layer_scale` | `(768,)` | `768` | Yes |
+| `blocks.1.norm.weight` | `(768,)` | `768` | Yes |
+| `blocks.1.ffn.w1.weight` | `(2048, 768)` | `1,572,864` | Yes |
+| `blocks.1.ffn.w2.weight` | `(2048, 768)` | `1,572,864` | Yes |
+| `blocks.1.ffn.w3.weight` | `(768, 2048)` | `1,572,864` | Yes |
+| `blocks.1.se.fc.0.weight` | `(192, 768)` | `147,456` | Yes |
+| `blocks.1.se.fc.2.weight` | `(768, 192)` | `147,456` | Yes |
+| `blocks.2.layer_scale` | `(768,)` | `768` | Yes |
+| `blocks.2.norm.weight` | `(768,)` | `768` | Yes |
+| `blocks.2.ffn.w1.weight` | `(2048, 768)` | `1,572,864` | Yes |
+| `blocks.2.ffn.w2.weight` | `(2048, 768)` | `1,572,864` | Yes |
+| `blocks.2.ffn.w3.weight` | `(768, 2048)` | `1,572,864` | Yes |
+| `blocks.2.se.fc.0.weight` | `(192, 768)` | `147,456` | Yes |
+| `blocks.2.se.fc.2.weight` | `(768, 192)` | `147,456` | Yes |
+| `blocks.3.layer_scale` | `(768,)` | `768` | Yes |
+| `blocks.3.norm.weight` | `(768,)` | `768` | Yes |
+| `blocks.3.ffn.w1.weight` | `(2048, 768)` | `1,572,864` | Yes |
+| `blocks.3.ffn.w2.weight` | `(2048, 768)` | `1,572,864` | Yes |
+| `blocks.3.ffn.w3.weight` | `(768, 2048)` | `1,572,864` | Yes |
+| `blocks.3.se.fc.0.weight` | `(192, 768)` | `147,456` | Yes |
+| `blocks.3.se.fc.2.weight` | `(768, 192)` | `147,456` | Yes |
+| `blocks.4.layer_scale` | `(768,)` | `768` | Yes |
+| `blocks.4.norm.weight` | `(768,)` | `768` | Yes |
+| `blocks.4.ffn.w1.weight` | `(2048, 768)` | `1,572,864` | Yes |
+| `blocks.4.ffn.w2.weight` | `(2048, 768)` | `1,572,864` | Yes |
+| `blocks.4.ffn.w3.weight` | `(768, 2048)` | `1,572,864` | Yes |
+| `blocks.4.se.fc.0.weight` | `(192, 768)` | `147,456` | Yes |
+| `blocks.4.se.fc.2.weight` | `(768, 192)` | `147,456` | Yes |
+| `blocks.5.layer_scale` | `(768,)` | `768` | Yes |
+| `blocks.5.norm.weight` | `(768,)` | `768` | Yes |
+| `blocks.5.ffn.w1.weight` | `(2048, 768)` | `1,572,864` | Yes |
+| `blocks.5.ffn.w2.weight` | `(2048, 768)` | `1,572,864` | Yes |
+| `blocks.5.ffn.w3.weight` | `(768, 2048)` | `1,572,864` | Yes |
+| `blocks.5.se.fc.0.weight` | `(192, 768)` | `147,456` | Yes |
+| `blocks.5.se.fc.2.weight` | `(768, 192)` | `147,456` | Yes |
+| `blocks.6.layer_scale` | `(768,)` | `768` | Yes |
+| `blocks.6.norm.weight` | `(768,)` | `768` | Yes |
+| `blocks.6.ffn.w1.weight` | `(2048, 768)` | `1,572,864` | Yes |
+| `blocks.6.ffn.w2.weight` | `(2048, 768)` | `1,572,864` | Yes |
+| `blocks.6.ffn.w3.weight` | `(768, 2048)` | `1,572,864` | Yes |
+| `blocks.6.se.fc.0.weight` | `(192, 768)` | `147,456` | Yes |
+| `blocks.6.se.fc.2.weight` | `(768, 192)` | `147,456` | Yes |
+| `blocks.7.layer_scale` | `(768,)` | `768` | Yes |
+| `blocks.7.norm.weight` | `(768,)` | `768` | Yes |
+| `blocks.7.ffn.w1.weight` | `(2048, 768)` | `1,572,864` | Yes |
+| `blocks.7.ffn.w2.weight` | `(2048, 768)` | `1,572,864` | Yes |
+| `blocks.7.ffn.w3.weight` | `(768, 2048)` | `1,572,864` | Yes |
+| `blocks.7.se.fc.0.weight` | `(192, 768)` | `147,456` | Yes |
+| `blocks.7.se.fc.2.weight` | `(768, 192)` | `147,456` | Yes |
+| `final_norm.weight` | `(768,)` | `768` | Yes |
+| `head.0.weight` | `(768, 768)` | `589,824` | Yes |
+| `head.0.bias` | `(768,)` | `768` | Yes |
+| `head.2.weight` | `(768, 768)` | `589,824` | Yes |
+| `head.2.bias` | `(768,)` | `768` | Yes |
+
+---
 ## Roadmap (Finale Phase)
 
 While the current system meets the core objectives of the problem statement, we have planned the following enhancements for the final production release:
